@@ -75,6 +75,9 @@ find configs/*.json -exec ./bin/runner {} \;
 
 # Visualize the scheduling timelines for each scenario
 python scripts/view_timelines.py
+
+# View the execution timeline of each block
+python scripts/view_blocksbysm.py
 ```
 
 Configuration Files
@@ -132,6 +135,11 @@ The layout of each configuration file is as follows:
         with up to 3 integers, specifying a multi-dimensional grid size.>,
       "data_size": <Number. Required, but may be ignored. The input size, in
         bytes, for the benchmark.>,
+      "sm_mask": <Hexidecimal mask. Optional. Which TPCs this benchmark will
+        not be permitted to run on. A bit set at index i indicates that TPC i
+        should be disabled for this benchmark. May be prefixed with ~ to
+        indicate that the mask should be inverted before application. Requires
+        building with libsmctrl.
       "additional_info": <A JSON object of any format. Optional. This can be
         used to pass additional benchmark-specific configuration parameters.>,
       "max_iterations": <Number. Optional. If specified, overrides the default

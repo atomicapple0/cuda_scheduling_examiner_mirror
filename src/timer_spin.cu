@@ -122,8 +122,8 @@ static void* Initialize(InitializationParameters *params) {
     Cleanup(state);
     return NULL;
   }
-  if (!CheckCUDAError(CreateCUDAStreamWithPriority(params->stream_priority,
-    &(state->stream)))) {
+  if (!CheckCUDAError(CreateCUDAStreamWithPriorityAndMask(
+    params->stream_priority, params->sm_mask, &(state->stream)))) {
     Cleanup(state);
     return NULL;
   }
@@ -186,7 +186,7 @@ static int CopyOut(void *data, TimingInformation *times) {
     return 0;
   }
   if (!CheckCUDAError(cudaStreamSynchronize(state->stream))) return 0;
-  host_times->kernel_name = "GPUSpin";
+  host_times->kernel_name = NULL;//"GPUSpin";
   host_times->block_count = state->block_count;
   host_times->thread_count = state->thread_count;
   times->kernel_count = 1;

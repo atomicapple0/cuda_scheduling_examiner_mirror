@@ -1,0 +1,296 @@
+{
+  "name": "Hello RTAS!",
+  "max_iterations": 1,
+  "max_time": 0,
+  "cuda_device": 1,
+  "pin_cpus": true,
+  "benchmarks": [
+    {
+      "filename": "./bin/multikernel.so",
+      "log_name": "rtas23_sayhellortas_2.json",
+      "label": "Stream 2",
+      "thread_count": 1,
+      "block_count": 1,
+      "data_size": 0,
+      "additional_info": [
+        {
+          "kernel_label": "K1",
+          "duration": 500000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x3e"
+        },
+        {
+          "kernel_label": "K2",
+          "duration": 250000000,
+          "block_count": 2,
+          "thread_count": 1024,
+          "sm_mask": "~0x28"
+        },
+        {
+          "kernel_label": "K3",
+          "duration": 250000000,
+          "block_count": 3,
+          "thread_count": 1024,
+          "sm_mask": "~0x2c"
+        },
+        {
+          "kernel_label": "K4",
+          "duration": 250000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x3e"
+        },
+        {
+          "kernel_label": "K5",
+          "duration": 250000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x3a"
+        },
+        {
+          "kernel_label": "K6",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x1"
+        },
+        {
+          "kernel_label": "K7",
+          "duration": 500000000,
+          "block_count": 2,
+          "thread_count": 1024,
+          "sm_mask": "~0x20"
+        },
+        {
+          "kernel_label": "K8",
+          "duration": 500000000,
+          "block_count": 10,
+          "thread_count": 1024,
+          "sm_mask": "~0x3e"
+        },
+        {
+          "kernel_label": "K9",
+          "duration": 500000000,
+          "block_count": 2,
+          "thread_count": 1024,
+          "sm_mask": "~0x20"
+        },
+        {
+          "kernel_label": "K10",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x01"
+        },
+        {
+          "kernel_label": "K11",
+          "duration": 500000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x3e"
+        },
+        {
+          "kernel_label": "K12",
+          "duration": 500000000,
+          "block_count": 2,
+          "thread_count": 1024,
+          "sm_mask": "~0x28"
+        },
+        {
+          "kernel_label": "K13",
+          "duration": 500000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x3e"
+        },
+        {
+          "kernel_label": "K14",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x01"
+        },
+        {
+          "kernel_label": "K15",
+          "duration": 500000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x3a"
+        },
+        {
+          "kernel_label": "K16",
+          "duration": 500000000,
+          "block_count": 3,
+          "thread_count": 1024,
+          "sm_mask": "~0x2a"
+        },
+        {
+          "kernel_label": "K17",
+          "duration": 500000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x2e"
+        }
+      ]
+    },
+    {
+      "filename": "./bin/multikernel.so",
+      "log_name": "rtas23_sayhellortas.json",
+      "label": "Stream 1",
+      "thread_count": 1,
+      "block_count": 1,
+      "data_size": 0,
+      "release_time": 0.001,
+      "additional_info": [
+        {
+          "kernel_label": "K1",
+          "duration": 500000000,
+          "block_count": 15,
+          "thread_count": 1024,
+          "sm_mask": "~0xfbe"
+        },
+        {
+          "kernel_label": "K2",
+          "duration": 250000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x228"
+        },
+        {
+          "kernel_label": "K3",
+          "duration": 250000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x22c"
+        },
+        {
+          "kernel_label": "K4",
+          "duration": 250000000,
+          "block_count": 15,
+          "thread_count": 1024,
+          "sm_mask": "~0xfbe"
+        },
+        {
+          "kernel_label": "K5",
+          "duration": 250000000,
+          "block_count": 14,
+          "thread_count": 1024,
+          "sm_mask": "~0xfba"
+        },
+        {
+          "kernel_label": "K6",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x1"
+        },
+        {
+          "kernel_label": "K7",
+          "duration": 500000000,
+          "block_count": 10,
+          "thread_count": 1024,
+          "sm_mask": "~0xf80"
+        },
+        {
+          "kernel_label": "K8",
+          "duration": 500000000,
+          "block_count": 6,
+          "thread_count": 1024,
+          "sm_mask": "~0xa80"
+        },
+        {
+          "kernel_label": "K9",
+          "duration": 500000000,
+          "block_count": 6,
+          "thread_count": 1024,
+          "sm_mask": "~0xa80"
+        },
+        {
+          "kernel_label": "K10",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x001"
+        },
+        {
+          "kernel_label": "K11",
+          "duration": 500000000,
+          "block_count": 15,
+          "thread_count": 1024,
+          "sm_mask": "~0xfbe"
+        },
+        {
+          "kernel_label": "K12",
+          "duration": 500000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x0a8"
+        },
+        {
+          "kernel_label": "K13",
+          "duration": 500000000,
+          "block_count": 7,
+          "thread_count": 1024,
+          "sm_mask": "~0x0be"
+        },
+        {
+          "kernel_label": "K14",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x001"
+        },
+        {
+          "kernel_label": "K15",
+          "duration": 500000000,
+          "block_count": 14,
+          "thread_count": 1024,
+          "sm_mask": "~0xfba"
+        },
+        {
+          "kernel_label": "K16",
+          "duration": 500000000,
+          "block_count": 5,
+          "thread_count": 1024,
+          "sm_mask": "~0x0aa"
+        },
+        {
+          "kernel_label": "K17",
+          "duration": 500000000,
+          "block_count": 6,
+          "thread_count": 1024,
+          "sm_mask": "~0x0ae"
+        },
+        {
+          "kernel_label": "K18",
+          "duration": 500000000,
+          "block_count": 1,
+          "thread_count": 1024,
+          "sm_mask": "~0x001"
+        },
+        {
+          "kernel_label": "K19",
+          "duration": 500000000,
+          "block_count": 10,
+          "thread_count": 1024,
+          "sm_mask": "~0xf80"
+        },
+        {
+          "kernel_label": "K20",
+          "duration": 500000000,
+          "block_count": 4,
+          "thread_count": 1024,
+          "sm_mask": "~0x880"
+        },
+        {
+          "kernel_label": "K21",
+          "duration": 500000000,
+          "block_count": 10,
+          "thread_count": 1024,
+          "sm_mask": "~0xf80"
+        }
+      ]
+    }
+  ]
+}

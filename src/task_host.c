@@ -225,7 +225,7 @@ static int SetCPUAffinity(TaskConfig *config) {
 // floatig-point number of *seconds*, even though they are recorded in ns. This
 // code should not be included in benchmark timing measurements.
 static int WriteTimesToOutput(FILE *output, TimingInformation *times,
-    SharedState *shared_state) {
+    SharedState *shared_state, TaskConfig *config) {
   // Times are printed relative to the program start time in order to make the
   // times smaller in the logs, rather than very large numbers.
   int i, j, block_time_count;
@@ -245,6 +245,11 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
       SanitizeJSONString(kernel_times->kernel_name, sanitized_name,
         sizeof(sanitized_name));
       if (fprintf(output, "\"kernel_name\": \"%s\", ", sanitized_name) < 0) {
+        return 0;
+      }
+    } else {
+      // Use the label
+      if (fprintf(output, "\"kernel_name\": \"%s\", ", config->label) < 0) {
         return 0;
       }
     }
@@ -518,7 +523,7 @@ static void* RunBenchmark(void *data) {
       return NULL;
     }
     if (!WriteTimesToOutput(config->output_file, &timing_info,
-      config->shared_state)) {
+      config->shared_state, config)) {
       printf("Benchmark %s failed writing to output file.\n", name);
       return NULL;
     }
@@ -680,6 +685,7 @@ static TaskConfig* CreateTaskConfigs(SharedState *shared_state) {
     new_list[i].parameters.additional_info = benchmark->additional_info;
     new_list[i].release_time = benchmark->release_time;
     new_list[i].parameters.stream_priority = benchmark->stream_priority;
+    new_list[i].parameters.sm_mask = benchmark->sm_mask;
     // Either cycle through CPUs or use the per-benchmark CPU core.
     if (config->pin_cpus) {
       new_list[i].cpu_core = current_cpu_core;

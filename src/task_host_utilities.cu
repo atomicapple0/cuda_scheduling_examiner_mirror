@@ -39,6 +39,40 @@ static double CurrentSeconds(void) {
   return ((double) ts.tv_sec) + (((double) ts.tv_nsec) / 1e9);
 }
 
+#if __CUDA_ARCH__ >= 300
+// Starting with sm_30, `globaltimer64` was added
+// Compiles to 5 inline SASS instructions on sm_52
+static __device__ inline uint64_t GlobalTimer64(void) {
+  uint32_t lo_bits, hi_bits, hi_bits_2;
+  uint64_t ret;
+  // Upper bits may rollever between our 1st and 2nd read
+  asm volatile("mov.u32 %0, %%globaltimer_hi;" : "=r"(hi_bits));
+  asm volatile("mov.u32 %0, %%globaltimer_lo;" : "=r"(lo_bits));
+  asm volatile("mov.u32 %0, %%globaltimer_hi;" : "=r"(hi_bits_2));
+  // If upper bits rolled over, lo_bits = 0
+  lo_bits = (hi_bits != hi_bits_2) ? 0 : lo_bits;
+  // As sm_52 SASS is naively 32-bit, the following ops get optimized out
+  ret = hi_bits_2;
+  ret <<= 32;
+  ret |= lo_bits;
+  return ret;
+}
+#elif __CUDA_ARCH__ < 200
+static __device__ inline uint64_t GlobalTimer64(void) {
+    uint32_t lo_bits;
+    uint64_t ret;
+    // On sm_13, we /only/ have `clock` (32 bits)
+    asm volatile("mov.u32 %0, %%clock;" : "=r"(lo_bits));
+    ret = 0;
+    ret |= lo_bits;
+    return ret;
+}
+#else
+#error Unsupported architecture!
+#endif
+
+
+/*
 // Returns the value of CUDA's global nanosecond timer.
 static __device__ inline uint64_t GlobalTimer64(void) {
   // Due to a bug in CUDA's 64-bit globaltimer, the lower 32 bits can wrap
@@ -58,12 +92,16 @@ static __device__ inline uint64_t GlobalTimer64(void) {
   }
   // Return the value with the updated high bits, but the low bits set to 0.
   return ((uint64_t) second_reading) << 32;
-}
+}*/
 
 // A simple kernel which writes the value of the globaltimer64 register to a
 // location in device memory.
-static __global__ void GetTime(uint64_t *time) {
+static __global__ void GetTime(uint64_t *time, volatile uint32_t *ready_barrier, volatile uint32_t *start_barrier, volatile uint32_t *end_barrier) {
+  *ready_barrier = 1;
+  while (!*start_barrier)
+    continue;
   *time = GlobalTimer64();
+  *end_barrier = 1;
 }
 
 // Allocates a private shared memory buffer containing the given number of
@@ -84,23 +122,48 @@ static void FreeSharedBuffer(void *buffer, size_t size) {
 
 // This function should be run in a separate process in order to read the GPU's
 // nanosecond counter. Returns 0 on error.
+// TODO: Cleanup allocations if something goes bad
 static void InternalReadGPUNanoseconds(int cuda_device, double *cpu_time,
     uint64_t *gpu_time) {
   uint64_t *device_time = NULL;
+  volatile uint32_t *gpu_start_barrier, *start_barrier = NULL;
+  volatile uint32_t *gpu_end_barrier, *end_barrier = NULL;
+  volatile uint32_t *gpu_ready_barrier, *ready_barrier = NULL;
+  volatile double cpu_start, cpu_end;
   if (!CheckCUDAError(cudaSetDevice(cuda_device))) return;
   if (!CheckCUDAError(cudaMalloc(&device_time, sizeof(*device_time)))) return;
+  if (!CheckCUDAError(cudaHostAlloc(&start_barrier, sizeof(*start_barrier), cudaHostAllocMapped))) return;
+  if (!CheckCUDAError(cudaHostAlloc(&end_barrier, sizeof(*end_barrier), cudaHostAllocMapped))) return;
+  if (!CheckCUDAError(cudaHostAlloc(&ready_barrier, sizeof(*ready_barrier), cudaHostAllocMapped))) return;
+  // Setup device pointers for all the barriers
+  if (!CheckCUDAError(cudaHostGetDevicePointer((uint32_t**)&gpu_start_barrier, (uint32_t*)start_barrier, 0))) return;
+  if (!CheckCUDAError(cudaHostGetDevicePointer((uint32_t**)&gpu_end_barrier, (uint32_t*)end_barrier, 0))) return;
+  if (!CheckCUDAError(cudaHostGetDevicePointer((uint32_t**)&gpu_ready_barrier, (uint32_t*)ready_barrier, 0))) return;
   // Run the kernel a first time to warm up the GPU.
-  GetTime<<<1, 1>>>(device_time);
+  GetTime<<<1, 1>>>(device_time, gpu_ready_barrier, gpu_start_barrier, gpu_end_barrier);
+  *start_barrier = 1;
   if (!CheckCUDAError(cudaDeviceSynchronize())) return;
   // Now run the actual time-checking kernel.
-  GetTime<<<1, 1>>>(device_time);
-  *cpu_time = CurrentSeconds();
-  if (!CheckCUDAError(cudaMemcpy(gpu_time, device_time, sizeof(*gpu_time),
-    cudaMemcpyDeviceToHost))) {
-    cudaFree(device_time);
-    return;
-  }
-  cudaFree(device_time);
+  *start_barrier = 0;
+  *end_barrier = 0;
+  *ready_barrier = 0;
+  GetTime<<<1, 1>>>(device_time, gpu_ready_barrier, gpu_start_barrier, gpu_end_barrier);
+  while (!*ready_barrier)
+    continue;
+  *start_barrier = 1;
+  cpu_start = CurrentSeconds();
+  while (!*end_barrier)
+    continue;
+  cpu_end = CurrentSeconds();
+  volatile double cpu_end2 = CurrentSeconds();
+  if (!CheckCUDAError(cudaMemcpy(gpu_time, device_time, sizeof(device_time), cudaMemcpyDeviceToHost))) return;
+  *cpu_time = (cpu_end - cpu_start) / 2.0 + cpu_start;
+  double max_error = (cpu_end - cpu_start) / 2.0;
+  fprintf(stderr, "max_error: %f us (error floor of %f us)\n", max_error * (1000.0 * 1000.0), (cpu_end2 - cpu_end) / 2.0 * (1000.0*1000.0));
+  cudaFree((void*)device_time);
+  cudaFree((void*)ready_barrier);
+  cudaFree((void*)start_barrier);
+  cudaFree((void*)end_barrier);
 }
 
 int GetHostDeviceTimeOffset(int cuda_device, double *host_seconds,
@@ -199,15 +262,44 @@ int GetMaxResidentThreads(int cuda_device) {
   return to_return;
 }
 
+#if __CUDA_ARCH__ >= 300
+// Starting with sm_30, `globaltimer64` was added
 static __global__ void TimerSpin(uint64_t ns_to_spin) {
   uint64_t start_time = GlobalTimer64();
   while ((GlobalTimer64() - start_time) < ns_to_spin) {
     continue;
   }
 }
+#elif __CUDA_ARCH__ < 200
+// On sm_13, we /only/ have `clock` (32 bits)
+static __device__ inline uint32_t Clock32(void) {
+    uint32_t lo_bits;
+    asm volatile("mov.u32 %0, %%clock;" : "=r"(lo_bits));
+    return lo_bits;
+}
+
+static __global__ void TimerSpin(uint64_t ns_to_spin) {
+  uint64_t total_time = 0;
+  uint32_t last_time = Clock32();
+  while (total_time < ns_to_spin) {
+    uint32_t time = Clock32();
+    if (time < last_time) {
+      // Rollover. Compensate...
+      total_time += time; // rollover to now
+      total_time += UINT_MAX - last_time;// last to rollover
+    } else {
+      // Step counter
+      total_time += time - last_time;
+    }
+    last_time = time;
+  }
+}
+#else
+#error Unsupported architecture!
+#endif
 
 // This function is intended to be run in a child process. Returns -1 on error.
-static double InternalGetGPUTimerScale(int cuda_device) {
+double InternalGetGPUTimerScale(int cuda_device) {
   struct timespec start, end;
   uint64_t nanoseconds_elapsed;
   if (!CheckCUDAError(cudaSetDevice(cuda_device))) return -1;
@@ -227,6 +319,7 @@ static double InternalGetGPUTimerScale(int cuda_device) {
   }
   nanoseconds_elapsed = end.tv_sec * 1e9 + end.tv_nsec;
   nanoseconds_elapsed -= start.tv_sec * 1e9 + start.tv_nsec;
+  printf("%ldns elapsed\n", nanoseconds_elapsed);
   return ((double) nanoseconds_elapsed) / ((double) TIMER_SPIN_DURATION);
 }
 
@@ -263,45 +356,4 @@ double GetGPUTimerScale(int cuda_device) {
     return -1;
   }
   return to_return;
-}
-
-int GetSingleBlockAndGridDimensions(InitializationParameters *params,
-    int *thread_count, int *block_count) {
-  int a, b;
-  if ((params->block_dim[1] != 1) || (params->block_dim[2] != 1)) {
-    printf("Expected 1-D block dimensions, but got [%d, %d, %d]\n",
-      params->block_dim[0], params->block_dim[1], params->block_dim[2]);
-    return 0;
-  }
-  if ((params->grid_dim[1] != 1) || (params->grid_dim[2] != 1)) {
-    printf("Expected 1-D grid dimensions, but got [%d, %d, %d]\n",
-      params->grid_dim[0], params->grid_dim[1], params->grid_dim[2]);
-    return 0;
-  }
-  a = params->block_dim[0];
-  if ((a < 1) || (a > 1024)) {
-    printf("Invalid number of threads in a block: %d\n", a);
-    return 0;
-  }
-  b = params->grid_dim[0];
-  if (b < 1) {
-    printf("Invalid number of blocks: %d\n", b);
-  }
-  *thread_count = a;
-  *block_count = b;
-  return 1;
-}
-
-int GetSingleBlockDimension(InitializationParameters *params,
-    int *thread_count) {
-  int x, y, z;
-  x = params->block_dim[0];
-  y = params->block_dim[1];
-  z = params->block_dim[2];
-  if ((y != 1) || (z != 1)) {
-    printf("Expected 1-D block dimensions, but got [%d, %d, %d]\n", x, y, z);
-    return 0;
-  }
-  *thread_count = x;
-  return 1;
 }

@@ -43,6 +43,9 @@
 #include "benchmark_gpu_utilities.h"
 #include "library_interface.h"
 #include "third_party/cJSON.h"
+#ifdef SMCTRL
+#include <libsmctrl.h>
+#endif
 
 // Holds the parameters for a single kernel's execution.
 typedef struct {
@@ -64,6 +67,8 @@ typedef struct {
   // The number of seconds to sleep after the previous kernel's completion,
   // before executing this kernel.
   double delay;
+  // Bitwise mask of which SMs/TPCs are disabled for this kernel
+  uint64_t sm_mask;
   // The host and device memory buffers for the kernel.
   double cuda_launch_times[3];
   uint64_t *host_block_times;
@@ -269,6 +274,25 @@ static int InitializeKernelConfigs(BenchmarkState *state, char *info) {
       }
       kernel_configs[i].delay = entry->valuedouble;
     }
+    entry = cJSON_GetObjectItem(list_entry, "sm_mask");
+#ifdef SMCTRL
+    if (!entry || (entry->type != cJSON_String)) {
+      kernel_configs[i].sm_mask = 0; // Enable all
+    } else {
+      // Support an enable mask via invert prefix
+      if (entry->valuestring[0] == '~') {
+          kernel_configs[i].sm_mask = strtoull(entry->valuestring + 1, NULL, 16);
+          kernel_configs[i].sm_mask = ~kernel_configs[i].sm_mask;
+      } else {
+          kernel_configs[i].sm_mask = strtoull(entry->valuestring, NULL, 16);
+      }
+    }
+#else
+    if (entry) {
+      printf("libsmctrl required for sm_mask in multikernel.so.\n");
+      goto ErrorCleanup;
+    }
+#endif
     if (!AllocateKernelDataMemory(kernel_configs + i)) goto ErrorCleanup;
     list_entry = list_entry->next;
   }
@@ -324,8 +348,8 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   // Create the stream
-  if (!CheckCUDAError(CreateCUDAStreamWithPriority(params->stream_priority,
-    &(state->stream)))) {
+  if (!CheckCUDAError(CreateCUDAStreamWithPriorityAndMask(
+    params->stream_priority, params->sm_mask, &(state->stream)))) {
     Cleanup(state);
     return NULL;
   }
@@ -496,6 +520,9 @@ static int Execute(void *data) {
       }
     }
     config->cuda_launch_times[0] = CurrentSeconds();
+#ifdef SMCTRL
+    libsmctrl_set_next_mask(config->sm_mask);
+#endif
     if (config->shared_memory_count == 0) {
       GPUSpin<<<config->block_count, config->thread_count, 0, state->stream>>>(
         config->spin_duration, config->device_block_times,

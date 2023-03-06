@@ -1,0 +1,33 @@
+{
+  "name": "Non-optimal Greedy Assignment",
+  "max_iterations": 1,
+  "max_time": 0.05,
+  "cuda_device": 0,
+  "pin_cpus": true,
+  "benchmarks": [
+    {
+      "filename": "./bin/timer_spin.so",
+      "log_name": "rtas23_greedy_blocking_1.json",
+      "stream_priority": -5,
+      "label": "K1",
+      "thread_count": 1024,
+      "block_count": 13,
+      "data_size": 0,
+      "additional_info": 250000000,
+      "release_time": 0,
+      "sm_mask": "0xfffffffffffffe00"
+    },
+    {
+      "filename": "./bin/timer_spin.so",
+      "log_name": "rtas23_greedy_blocking_2.json",
+      "stream_priority": -5,
+      "label": "K2",
+      "thread_count": 1024,
+      "block_count": 5,
+      "data_size": 0,
+      "additional_info": 250000000,
+      "release_time": 0,
+      "sm_mask": "0xfffffffffffffff0"
+    }
+  ]
+}

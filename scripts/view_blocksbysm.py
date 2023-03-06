@@ -55,14 +55,26 @@ idToColorMap = {0: 'azure',
                 11: 'LightGoldenrod2',
                 12: 'light sea green',
                 13: 'MediumPurple1',
-                14: 'gray68',
-                15: 'orange',
-                16: 'gray32',
-                17: 'turquoise3',
-                18: 'light pink',
-                19: 'light blue',
-                20: 'LightGoldenrod2',
-                21: 'brown',
+                14: 'azure',
+                15: 'light pink',
+                16: 'LightGoldenrod2',
+                17: 'DarkSeaGreen1',
+                18: 'MediumPurple1',
+                19: 'light gray',
+                20: 'orange',
+                21: 'gray32',
+                22: 'turquoise3',
+                23: 'light pink',
+                24: 'light blue',
+                25: 'LightGoldenrod2',
+                26: 'light sea green',
+                27: 'gray32',
+                28: 'orange',
+                29: 'turquoise3',
+                30: 'light pink',
+                31: 'light blue',
+                32: 'LightGoldenrod2',
+                33: 'brown',
                 22: 'DarkOliveGreen',
                 23: 'deep pink',
                 24: 'gold1',
@@ -82,6 +94,9 @@ patternColorToBgColorMap = {"light pink": "misty rose",
                             "deep pink": "light salmon",
                             "gold1": "light yellow",
                             "gold4": "light slate gray",
+                            "light blue": "azure",
+                            "LightGoldenrod2": "LightGoldenrod3",
+                            "light sea green": "dark sea green",
                             }
 
 patternColorToArrowColorMap = {"light pink": "IndianRed3",
@@ -97,7 +112,10 @@ patternColorToArrowColorMap = {"light pink": "IndianRed3",
                                "DarkOliveGreen": "DarkOliveGreen",
                                "deep pink": "deep pink",
                                "gold1": "gold1",
-                               "gold4": "gold4"}
+                               "gold4": "gold4",
+                               "light blue": "dark blue",
+                               "light sea green":"light sea green"
+}
 
 BUFFER_TOP = 32
 BUFFER_BOTTOM = 68
@@ -298,7 +316,15 @@ idToPatternMap = {0: HorizontalLinePattern,
                   23: HorizontalLinePattern,
                   24: VerticalLinePattern,
                   25: LeftDiagonalLinePattern,
-                  26: RightDiagonalLinePattern}
+                  26: RightDiagonalLinePattern,
+                  27: HorizontalLinePattern,
+                  28: RightDiagonalLinePattern,
+                  29: VerticalLinePattern,
+                  30: LeftDiagonalLinePattern,
+                  31: VerticalLinePattern,
+                  32: RightDiagonalLinePattern,
+                  33: LeftDiagonalLinePattern,
+                  34: HorizontalLinePattern}
 
 class PlotRect(Rectangle):
     def __init__(self, w, h):
@@ -376,10 +402,10 @@ class BlockSMRect(object):
         py = (blockTop + blockBottom) / 2
 
         kernelName = block.kernelName
-        self.label = Text(Point(px, py), "%s: %s" % (kernelName, block.id))
+        self.label = Text(Point(px, py), "%s:%s" % (kernelName, block.id))
         if USE_BOLD_FONT:
             self.label.setStyle("bold")
-        self.label.setSize(14)
+        self.label.setSize(10)
 
     def draw(self, canvas):
         self.block.draw(canvas)
@@ -836,15 +862,18 @@ class ResizingCanvasFrame(CanvasFrame):
         self.canvas.delete("all")
 
 class BlockSMDisplay():
-    def __init__(self, win, benchmark, window_width, window_height):
-        self.setup(win, window_width, window_height, benchmark)
+    def __init__(self, win, benchmark, window_width, window_height, start_time, end_time):
+        self.setup(win, window_width, window_height, benchmark, start_time, end_time)
         self.draw_benchmark()
 
-    def setup(self, win, width, height, benchmark):
+    def setup(self, win, width, height, benchmark, start_time, end_time):
         self.width = width
         self.height = height
-        self.firstTime = 0.0
-        self.totalTime = (benchmark.get_end() - self.firstTime) * 1.05
+        self.firstTime = start_time
+        if end_time:
+            self.totalTime = end_time - self.firstTime
+        else:
+            self.totalTime = (benchmark.get_end() - self.firstTime) * 1.05
 
         # Create a canvas
         self.canvas = ResizingCanvasFrame(win, self.width, self.height, self.redraw)
@@ -855,6 +884,7 @@ class BlockSMDisplay():
         if len(benchmark.streams) > 0:
             self.numSms = int(self.benchmark.streams[0].maxResidentThreads / 2048)
             self.name = self.benchmark.streams[0].scenarioName
+        self.blocksToPlot = []
 
     def redraw(self, width, height):
         self.canvas.clear_canvas()
@@ -865,6 +895,8 @@ class BlockSMDisplay():
 
     def draw_benchmark(self):
         global LEGEND_HEIGHT
+#        # Streams need to be plotted in order of completion time
+#        self.benchmark.streams = sorted(self.benchmark.streams, key=Stream.get_end)
 
         if len(self.benchmark.streams) == 0: return
 
@@ -881,6 +913,16 @@ class BlockSMDisplay():
             color = idToColorMap[i] if USE_PATTERNS else patternColorToArrowColorMap[idToColorMap[i]]
             patternType = idToPatternMap[i] if USE_PATTERNS else None
             self.draw_stream(self.benchmark.streams[i], color, patternType, i, smBase, releaseDict)
+
+#        for tup in sorted(self.blocksToPlot, key=lambda tup: tup[3]):
+#            block = tup[0];
+#            color = tup[1]
+#            patternType = tup[2]
+#            otherThreads = tup[3]
+#            br = BlockSMRect(block, self.firstTime, self.totalTime, self.numSms,
+#                             self.width, self.height, color, patternType, otherThreads)
+
+#            br.draw(self.canvas)
 
         # Draw the title, legend, and axes
         self.draw_title()
@@ -905,13 +947,16 @@ class BlockSMDisplay():
             # Calculate competing threadcount
             otherThreads = 0
             myOverlap = [(0, self.totalTime, 0, block.sm, "", -1)]
+            # Check every other interval already plotted for this SM
             for interval in smBase[block.sm]:
+                # If the competing interval starts before we end, and ends after we start
                 if interval[0] < block.end and interval[1] > block.start:
                     # Find the sub-interval of my own that this overlaps for
                     intervalStart = max(interval[0], block.start)
                     intervalEnd = min(interval[1], block.end)
 
                     # Find any interval I've already built up overlap for
+                    # We break our execution interval into segments. Create a list of all segments that exist simultaniously to a competitor.
                     myoverlappingintervals = []
                     for myinterval in myOverlap:
                         if myinterval[0] < intervalEnd and myinterval[1] > intervalStart:
@@ -919,6 +964,8 @@ class BlockSMDisplay():
 
                     # For each interval I already know about that I overlap with,
                     # consider a few cases
+                    # For each of our segments that exist (at some point) against a competitor,
+                    # break it into segments that either fully exist against the competitor, or exist against none at all.
                     for myinterval in myoverlappingintervals:
                         # Check if my interval completely encloses this new one (in that case,
                         # split at the beginning and end of this new one)
@@ -941,10 +988,12 @@ class BlockSMDisplay():
                             myOverlap.remove(myinterval)
                             myOverlap.append((myinterval[0], intervalEnd, myinterval[2] + interval[2], myinterval[3], myinterval[4], myinterval[5]))
                             myOverlap.append((intervalEnd, myinterval[1], myinterval[2], myinterval[3], myinterval[4], myinterval[5]))
+                        # And do nothing if my interval is completely enclosed by the other one????
 
             for interval in myOverlap:
                 otherThreads = max(otherThreads, interval[2])
 
+#            self.blocksToPlot.append((block, color, patternType, otherThreads));
             br = BlockSMRect(block, self.firstTime, self.totalTime, self.numSms,
                              self.width, self.height, color, patternType, otherThreads)
 
@@ -1112,18 +1161,19 @@ class Benchmark(object):
 def get_block_intervals(name, benchmarks):
     return Benchmark(name, benchmarks)
 
-def plot_scenario(benchmarks, name, window_name, window_width, window_height, save):
+def plot_scenario(benchmarks, name, window_name, window_width, window_height,
+                  save, start_time, end_time):
     """Takes a list of parsed benchmark results and a scenario name and
     generates a plot showing the timeline of benchmark behaviors for the
     specific scenario."""
     win = Window(window_name)
     graph = BlockSMDisplay(win, get_block_intervals(name, benchmarks),
-                           window_width, window_height)
+                           window_width, window_height, start_time, end_time)
     if save:
         canvasvg.saveall(name+".svg", graph.canvas.canvas)
     win.mainloop()
 
-def show_plots(filenames, window_name, window_width, window_height, save):
+def show_plots(filenames, window_name, window_width, window_height, save, start_time, end_time):
     """Takes a list of filenames, and generates one plot per scenario found in
     the files."""
     # Parse the files
@@ -1143,32 +1193,36 @@ def show_plots(filenames, window_name, window_width, window_height, save):
     # Plot the scenarios
     for scenario in scenarios:
         plot_scenario(scenarios[scenario], scenario, window_name, window_width,
-                      window_height, save)
+                      window_height, save, start_time, end_time)
 
 if __name__ == "__main__":
     args = {}
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory",
-        help="Directory containing result JSON files.", default='./results')
+        help="Path prefix of result JSON files.", default='./results')
     parser.add_argument("-t", "--title",
         help="Title of the display window.", default="Block Execution by SM")
     parser.add_argument("-v", "--height",
-        help="Height (in pixels) of the plot.", default=600, type=int)
+        help="Height (in pixels) of the plot (600 default).", default=600, type=int)
     parser.add_argument("-w", "--width",
-        help="Width (in pixels) of the plot.", default=800, type=int)
+        help="Width (in pixels) of the plot (800 default).", default=800, type=int)
+    parser.add_argument("-s", "--start",
+        help="What time to start plotting from.", default=0, type=float)
+    parser.add_argument("-e", "--end",
+        help="What time to end plotting at.", default=0, type=float)
     if SAVE_AVIL:
-        parser.add_argument("-s", "--save",
+        parser.add_argument("-o", "--output",
             help="Should plots be saved?", action="store_true")
     # Legacy parser for old usage:
     # `python view_blocksbysm.py [results directory (default: ./results)]`
     if len(sys.argv) == 2 and sys.argv[1][0] != "-":
-        print("Warning: Unnamed arguments are deprecated! Run %s --help for information on new format."%(sys.argv[0], sys.argv[0]))
+        print("Warning: Unnamed arguments are deprecated! Run %s --help for information on new format."%(sys.argv[0]))
         args = parser.parse_args([]) # Get defaults
         args.directory = sys.argv[1]
     else:
         args = parser.parse_args()
-    filenames = glob.glob(args.directory + "/*.json")
+    filenames = glob.glob(args.directory + "*.json")
     if SAVE_AVIL:
-        show_plots(filenames, args.title, args.width, args.height, args.save)
+        show_plots(filenames, args.title, args.width, args.height, args.output, args.start, args.end)
     else:
-        show_plots(filenames, args.title, args.width, args.height, False)
+        show_plots(filenames, args.title, args.width, args.height, False, args.start, args.end)

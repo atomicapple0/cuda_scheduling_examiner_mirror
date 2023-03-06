@@ -1,15 +1,26 @@
 .PHONY: all clean benchmarks directories
 
+# Uncomment this line and set the correct path to use SM/TPC partitioning
+# library `libsmctrl`.
+LIBSMCTRL_PATH = ../libsmctrl
+
 CFLAGS := -Wall -Werror -O3 -g -fPIC
 NVCC ?= /usr/local/cuda-11.4/bin/nvcc
 
+ifdef LIBSMCTRL_PATH
+LDFLAGS += -L$(LIBSMCTRL_PATH) -lsmctrl -lcuda
+CFLAGS += -I$(LIBSMCTRL_PATH) -DSMCTRL
+endif
+
 NVCCFLAGS := -g --ptxas-options=-v --compiler-options="$(CFLAGS)" \
+	--generate-code arch=compute_35,code=[compute_35,sm_35] \
 	--generate-code arch=compute_50,code=[compute_50,sm_50] \
 	--generate-code arch=compute_53,code=[compute_53,sm_53] \
 	--generate-code arch=compute_60,code=[compute_60,sm_60] \
 	--generate-code arch=compute_62,code=[compute_62,sm_62] \
-	--generate-code arch=compute_62,code=[compute_70,sm_70] \
-	--generate-code arch=compute_62,code=[compute_75,sm_75]
+	--generate-code arch=compute_70,code=[compute_70,sm_70] $(LDFLAGS)
+#	--generate-code arch=compute_30,code=[compute_30,sm_30] \
+#	--cudart=shared \
 
 BENCHMARK_DEPENDENCIES := src/library_interface.h \
 	src/benchmark_gpu_utilities.h obj/benchmark_gpu_utilities.o
@@ -33,6 +44,10 @@ bin/mandelbrot.so: src/mandelbrot.cu $(BENCHMARK_DEPENDENCIES)
 bin/timer_spin.so: src/timer_spin.cu $(BENCHMARK_DEPENDENCIES)
 	$(NVCC) --shared $(NVCCFLAGS) -o bin/timer_spin.so src/timer_spin.cu \
 		obj/benchmark_gpu_utilities.o
+
+bin/timer_spin_callback.so: src/timer_spin_callback.cu $(BENCHMARK_DEPENDENCIES)
+	$(NVCC) --shared $(NVCCFLAGS) -o bin/timer_spin_callback.so \
+		src/timer_spin_callback.cu obj/benchmark_gpu_utilities.o
 
 bin/counter_spin.so: src/counter_spin.cu $(BENCHMARK_DEPENDENCIES)
 	$(NVCC) --shared $(NVCCFLAGS) -o bin/counter_spin.so src/counter_spin.cu \

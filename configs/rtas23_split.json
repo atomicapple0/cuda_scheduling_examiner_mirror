@@ -1,0 +1,31 @@
+{
+  "name": "Sharing with an SM Mask",
+  "max_iterations": 1,
+  "max_time": 0,
+  "cuda_device": 0,
+  "pin_cpus": true,
+  "benchmarks": [
+    {
+      "filename": "./bin/timer_spin.so",
+      "log_name": "rtas23_split_1.json",
+      "label": "Kernel 1",
+      "thread_count": 1024,
+      "block_count": 20,
+      "data_size": 0,
+      "additional_info": 250000000,
+      "release_time": 0,
+      "sm_mask": "0xffffffffffffffe0"
+    },
+    {
+      "filename": "./bin/timer_spin.so",
+      "log_name": "rtas23_split_2.json",
+      "label": "Kernel 2",
+      "thread_count": 1024,
+      "block_count": 8,
+      "data_size": 0,
+      "additional_info": 250000000,
+      "release_time": 0.01,
+      "sm_mask": "0xfffffffffffff01f"
+    }
+  ]
+}

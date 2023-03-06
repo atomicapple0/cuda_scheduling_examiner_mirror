@@ -6,21 +6,25 @@
 // While this benchmark will spin for an arbitrary default number of
 // nanoseconds, the specific amount of time to spin may be given as a number
 // of nanoseconds provided in the "additional_info" configuration field.
-//
-// This benchmark differs from the regular timer_spin only in that it issues
-// all work to the default stream, rather than a user-defined stream.
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "benchmark_gpu_utilities.h"
 #include "library_interface.h"
+#include <libsmctrl.h>
 
 // If no number is provided, spin for this number of nanoseconds.
 #define DEFAULT_SPIN_DURATION (10 * 1000 * 1000)
 
 // Holds the local state for one instance of this benchmark.
 typedef struct {
+  // The CUDA stream with which all operations will be associated.
+  cudaStream_t stream;
+  // This will be set to 0 if the CUDA stream hasn't been created yet. This is
+  // useful because it allows us to unconditionally call Cleanup on error
+  // without needing to worry about calling cudaStreamDestroy twice.
+  int stream_created;
   // Holds the device copy of the start and end times of each block.
   uint64_t *device_block_times;
   // Holds the device copy of the SMID each block was assigned to.
@@ -32,11 +36,7 @@ typedef struct {
   int thread_count;
   // Holds host-side times that are shared with the calling process.
   KernelTimes spin_kernel_times;
-  // The kernel launch will still use the default stream--this one is only for
-  // copying the runtime data from the GPU.
-  cudaStream_t stream;
-  // Nonzero if stream for copying results has been created.
-  int stream_created;
+  uint64_t sm_mask;
 } TaskState;
 
 // Implements the cleanup function required by the library interface, but is
@@ -51,6 +51,8 @@ static void Cleanup(void *data) {
   if (host_times->block_times) cudaFreeHost(host_times->block_times);
   if (host_times->block_smids) cudaFreeHost(host_times->block_smids);
   if (state->stream_created) {
+    // Call CheckCUDAError here to print a message, even though we won't check
+    // the return value.
     CheckCUDAError(cudaStreamDestroy(state->stream));
   }
   memset(state, 0, sizeof(*state));
@@ -123,10 +125,11 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   if (!CheckCUDAError(CreateCUDAStreamWithPriorityAndMask(
-    params->stream_priority, params->sm_mask, &(state->stream)))) {
+    params->stream_priority, 0, &(state->stream)))) {
     Cleanup(state);
     return NULL;
   }
+  state->sm_mask = params->sm_mask;
   state->stream_created = 1;
   return state;
 }
@@ -160,10 +163,13 @@ static __global__ void GPUSpin(uint64_t spin_duration, uint64_t *block_times,
 static int Execute(void *data) {
   TaskState *state = (TaskState *) data;
   state->spin_kernel_times.cuda_launch_times[0] = CurrentSeconds();
-  GPUSpin<<<state->block_count, state->thread_count>>>(state->spin_duration,
-    state->device_block_times, state->device_block_smids);
+  libsmctrl_set_next_mask(state->sm_mask);
+  GPUSpin<<<state->block_count, state->thread_count, 0, state->stream>>>(
+    state->spin_duration, state->device_block_times,
+    state->device_block_smids);
   state->spin_kernel_times.cuda_launch_times[1] = CurrentSeconds();
-  state->spin_kernel_times.cuda_launch_times[2] = 0;
+  if (!CheckCUDAError(cudaStreamSynchronize(state->stream))) return 0;
+  state->spin_kernel_times.cuda_launch_times[2] = CurrentSeconds();
   return 1;
 }
 
@@ -184,7 +190,7 @@ static int CopyOut(void *data, TimingInformation *times) {
     return 0;
   }
   if (!CheckCUDAError(cudaStreamSynchronize(state->stream))) return 0;
-  host_times->kernel_name = "GPUSpin";
+  host_times->kernel_name = NULL;//"GPUSpin";
   host_times->block_count = state->block_count;
   host_times->thread_count = state->thread_count;
   times->kernel_count = 1;
@@ -193,7 +199,7 @@ static int CopyOut(void *data, TimingInformation *times) {
 }
 
 static const char* GetName(void) {
-  return "Timer Spin (default stream)";
+  return "Timer Spin";
 }
 
 // This should be the only function we export from the library, to provide
