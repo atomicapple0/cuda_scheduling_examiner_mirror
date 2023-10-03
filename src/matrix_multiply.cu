@@ -67,7 +67,7 @@ static void Cleanup(void *data) {
   if (state->device_block_times) cudaFree(state->device_block_times);
   if (state->device_block_smids) cudaFree(state->device_block_smids);
 
-  memset(state, 0, sizeof(*state));
+  memset((void *)state, 0, sizeof(*state));
   free(state);
 }
 

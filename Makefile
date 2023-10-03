@@ -2,10 +2,10 @@
 
 # Uncomment this line and set the correct path to use SM/TPC partitioning
 # library `libsmctrl`.
-LIBSMCTRL_PATH = ../libsmctrl
+LIBSMCTRL_PATH = /h/bez/work/libsmctrl
 
 CFLAGS := -Wall -Werror -O3 -g -fPIC
-NVCC ?= /usr/local/cuda-11.4/bin/nvcc
+NVCC ?= /usr/local/cuda-12.2/bin/nvcc
 
 ifdef LIBSMCTRL_PATH
 LDFLAGS += -L$(LIBSMCTRL_PATH) -lsmctrl -lcuda
@@ -13,12 +13,13 @@ CFLAGS += -I$(LIBSMCTRL_PATH) -DSMCTRL
 endif
 
 NVCCFLAGS := -g --ptxas-options=-v --compiler-options="$(CFLAGS)" \
-	--generate-code arch=compute_35,code=[compute_35,sm_35] \
-	--generate-code arch=compute_50,code=[compute_50,sm_50] \
-	--generate-code arch=compute_53,code=[compute_53,sm_53] \
-	--generate-code arch=compute_60,code=[compute_60,sm_60] \
-	--generate-code arch=compute_62,code=[compute_62,sm_62] \
-	--generate-code arch=compute_70,code=[compute_70,sm_70] $(LDFLAGS)
+	--generate-code arch=compute_80,code=[compute_80,sm_80] $(LDFLAGS)
+#	--generate-code arch=compute_35,code=[compute_35,sm_35] \
+#	--generate-code arch=compute_50,code=[compute_50,sm_50] \
+#	--generate-code arch=compute_53,code=[compute_53,sm_53] \
+#	--generate-code arch=compute_60,code=[compute_60,sm_60] \
+#	--generate-code arch=compute_62,code=[compute_62,sm_62] \
+#	--generate-code arch=compute_70,code=[compute_70,sm_70] $(LDFLAGS)
 #	--generate-code arch=compute_30,code=[compute_30,sm_30] \
 #	--cudart=shared \
 
